@@ -1,0 +1,262 @@
+name: GHA Diagnostic Runner
+
+on:
+  workflow_dispatch:
+    inputs:
+      full_diagnostic:
+        description: 'Run full diagnostic including API tests'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  DIAGNOSTIC_RUN: "true"
+
+jobs:
+  system-info:
+    name: System Information
+    runs-on: ubuntu-latest
+    steps:
+      - name: System specs
+        run: |
+          echo "=== UNAME ==="
+          uname -a
+          echo ""
+          echo "=== CPU INFO ==="
+          cat /proc/cpuinfo | grep "model name" | head -1
+          echo "CPU Cores: $(nproc)"
+          echo ""
+          echo "=== MEMORY ==="
+          free -h
+          echo ""
+          echo "=== DISK ==="
+          df -h
+          echo ""
+          echo "=== LOAD ==="
+          uptime
+          
+      - name: OS Version
+        run: |
+          echo "=== OS DETAILS ==="
+          cat /etc/os-release
+          echo ""
+          echo "=== KERNEL ==="
+          cat /proc/version
+
+  software-versions:
+    name: Installed Software Versions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Programming Languages
+        run: |
+          echo "=== NODE ===" && node --version 2>/dev/null || echo "Not installed"
+          echo "=== NPM ===" && npm --version 2>/dev/null || echo "Not installed"
+          echo "=== PYTHON ===" && python3 --version 2>/dev/null || echo "Not installed"
+          echo "=== PIP ===" && pip3 --version 2>/dev/null || echo "Not installed"
+          echo "=== GO ===" && go version 2>/dev/null || echo "Not installed"
+          echo "=== RUST ===" && rustc --version 2>/dev/null || echo "Not installed"
+          echo "=== JAVA ===" && java --version 2>/dev/null || echo "Not installed"
+          echo "=== RUBY ===" && ruby --version 2>/dev/null || echo "Not installed"
+          echo "=== PHP ===" && php --version 2>/dev/null || echo "Not installed"
+          echo "=== DOTNET ===" && dotnet --version 2>/dev/null || echo "Not installed"
+          echo "=== SWIFT ===" && swift --version 2>/dev/null || echo "Not installed"
+
+      - name: DevOps Tools
+        run: |
+          echo "=== GIT ===" && git --version
+          echo "=== GH ===" && gh --version 2>/dev/null || echo "Not installed"
+          echo "=== DOCKER ===" && docker --version 2>/dev/null || echo "Not installed"
+          echo "=== docker compose ===" && docker compose version 2>/dev/null || echo "Not installed"
+          echo "=== kubectl ===" && kubectl version --client 2>/dev/null || echo "Not installed"
+          echo "=== helm ===" && helm version 2>/dev/null || echo "Not installed"
+          echo "=== terraform ===" && terraform --version 2>/dev/null || echo "Not installed"
+          echo "=== ansible ===" && ansible --version 2>/dev/null | head -1 || echo "Not installed"
+
+      - name: Cloud CLIs
+        run: |
+          echo "=== AWS CLI ===" && aws --version 2>/dev/null || echo "Not installed"
+          echo "=== GCP gcloud ===" && gcloud --version 2>/dev/null | head -1 || echo "Not installed"
+          echo "=== AZURE az ===" && az --version 2>/dev/null | head -1 || echo "Not installed"
+
+      - name: Build Tools
+        run: |
+          echo "=== CMAKE ===" && cmake --version 2>/dev/null | head -1 || echo "Not installed"
+          echo "=== MAKE ===" && make --version 2>/dev/null | head -1 || echo "Not installed"
+          echo "=== GCC ===" && gcc --version 2>/dev/null | head -1 || echo "Not installed"
+          echo "=== NINJA ===" && ninja --version 2>/dev/null || echo "Not installed"
+          echo "=== GRADLE ===" && gradle --version 2>/dev/null | head -1 || echo "Not installed"
+          echo "=== MAVEN ===" && mvn --version 2>/dev/null | head -1 || echo "Not installed"
+
+  environment-variables:
+    name: Environment Variables
+    runs-on: ubuntu-latest
+    steps:
+      - name: GitHub Context Variables
+        run: |
+          echo "=== GITHUB CONTEXT ==="
+          echo "GITHUB_REPOSITORY: $GITHUB_REPOSITORY"
+          echo "GITHUB_ACTOR: $GITHUB_ACTOR"
+          echo "GITHUB_REF: $GITHUB_REF"
+          echo "GITHUB_SHA: $GITHUB_SHA"
+          echo "GITHUB_RUN_ID: $GITHUB_RUN_ID"
+          echo "GITHUB_RUN_NUMBER: $GITHUB_RUN_NUMBER"
+          echo "GITHUB_JOB: $GITHUB_JOB"
+          echo "GITHUB_WORKFLOW: $GITHUB_WORKFLOW"
+          echo "GITHUB_EVENT_NAME: $GITHUB_EVENT_NAME"
+          echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
+          echo "GITHUB_SERVER_URL: $GITHUB_SERVER_URL"
+          echo "GITHUB_API_URL: $GITHUB_API_URL"
+
+      - name: Runner Context Variables
+        run: |
+          echo "=== RUNNER CONTEXT ==="
+          echo "RUNNER_NAME: $RUNNER_NAME"
+          echo "RUNNER_OS: $RUNNER_OS"
+          echo "RUNNER_TEMP: $RUNNER_TEMP"
+          echo "RUNNER_TOOL_CACHE: $RUNNER_TOOL_CACHE"
+
+      - name: All Environment Variables (sorted)
+        run: |
+          echo "=== ALL ENV VARS ==="
+          printenv | sort
+
+  artifact-test:
+    name: Artifact Upload/Download Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create test files
+        run: |
+          mkdir -p artifact-test
+          echo "Test artifact created at $(date)" > artifact-test/test.txt
+          echo '{"name":"diagnostic-test","version":"1.0"}' > artifact-test/config.json
+          
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostic-artifact
+          path: artifact-test/
+          retention-days: 1
+          
+      - name: Download and verify artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: diagnostic-artifact
+          path: downloaded-artifact
+          
+      - name: Verify downloaded files
+        run: |
+          echo "=== DOWNLOADED FILES ==="
+          ls -la downloaded-artifact/
+          echo ""
+          echo "=== FILE CONTENTS ==="
+          cat downloaded-artifact/test.txt
+          cat downloaded-artifact/config.json
+
+  cache-test:
+    name: Cache Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create test cache files
+        run: |
+          mkdir -p cache-test-dir
+          echo "Cache test content - $(date)" > cache-test-dir/cache.txt
+          echo '{"cache":"test"}' > cache-test-dir/cache.json
+          
+      - name: Cache packages
+        uses: actions/cache@v4
+        with:
+          path: cache-test-dir
+          key: diagnostic-cache-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            diagnostic-cache-${{ runner.os }}-
+            
+      - name: Verify cache status
+        run: |
+          echo "=== CACHE STATUS ==="
+          if [ -f "cache-test-dir/cache.txt" ]; then
+            echo "CACHE HIT! Contents:"
+            cat cache-test-dir/cache.txt
+          else
+            echo "CACHE MISS - First run for this key"
+          fi
+
+  github-api-test:
+    name: GitHub API Rate Limits
+    if: inputs.full_diagnostic == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check API rate limits
+        run: |
+          echo "=== API RATE LIMITS ==="
+          curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/rate_limit | jq .
+          
+      - name: List workflow runs
+        run: |
+          echo "=== RECENT WORKFLOW RUNS ==="
+          curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/runs?per_page=5" \
+            | jq '.workflow_runs[]? | {name, status, conclusion, created_at}'
+            
+      - name: Get repository info
+        run: |
+          echo "=== REPOSITORY INFO ==="
+          curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}" \
+            | jq '{name, private, default_branch, language, stargazers_count}'
+
+  docker-test:
+    name: Docker Capabilities
+    runs-on: ubuntu-latest
+    steps:
+      - name: Docker info
+        run: |
+          echo "=== DOCKER VERSION ==="
+          docker --version
+          docker info 2>/dev/null | grep -E "Server Version|Storage Driver|Kernel Version" || echo "Docker info limited"
+          
+      - name: Test Docker build
+        run: |
+          echo "=== DOCKER BUILD TEST ==="
+          docker build -t diagnostic-test - << 'EOF'
+          FROM alpine:latest
+          RUN echo "Build test successful"
+          CMD ["echo", "Container running"]
+          EOF
+          docker run --rm diagnostic-test
+          
+      - name: Docker buildx check
+        run: |
+          echo "=== DOCKER BUILDX ==="
+          docker buildx version 2>/dev/null || echo "Buildx not available"
+          docker buildx ls 2>/dev/null || echo "Cannot list builders"
+
+  limits-summary:
+    name: GitHub Actions Limits Summary
+    runs-on: ubuntu-latest
+    steps:
+      - name: Output summary
+        run: |
+          echo "=============================================="
+          echo "     GITHUB ACTIONS DIAGNOSTIC COMPLETE"
+          echo "=============================================="
+          echo ""
+          echo "Runner: ${{ runner.os }}"
+          echo "Workflow: ${{ github.workflow }}"
+          echo "Run ID: ${{ github.run_id }}"
+          echo "Actor: ${{ github.actor }}"
+          echo ""
+          echo "=== KNOWN LIMITS (Free Plan) ==="
+          echo "Max concurrent jobs: 20"
+          echo "Max workflow runs: 20 simultaneous"
+          echo "Max matrix jobs: 256"
+          echo "Max artifact size: 10 GB"
+          echo "Max cache size: 10 GB"
+          echo "Max log size: 1 GB per run"
+          echo "Job timeout: 360 minutes max"
+          echo "Monthly minutes: 2,000"
+          echo ""
+          echo "=== COST PER MINUTE ==="
+          echo "Linux: \$0.008"
+          echo "Windows: \$0.016"
+          echo "macOS: \$0.021"
